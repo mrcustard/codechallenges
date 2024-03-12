@@ -1,49 +1,33 @@
-#!/usr/bin/env python3
+import re
+from collections import defaultdict, Counter
 
-from collections import defaultdict
+log_pattern = re.compile(r'(\d+\.\d+\.\d+\.\d+)\s+\[(\d+/\d+/\d+:\d+:\d+:\d+)\s+(-\d+)\]\s+"(\w+)\s+(\S+)"\s+(\d+)\s+(\d+)\s+(\d+)')
 
+logs = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
+total_requests = 0
+total_response_size = 0
+error_requests = 0
 
-class logParse:
-    def __init__(self, filename):
-        self.file = open(filename, 'r')
-        self.lines = []
+with open('./input1.txt', 'r') as file:
+    for line in file:
+        match = log_pattern.match(line)
+        if match:
+            ip, timestamp, tz, method, path, status, response_size, request_size = match.groups()
+            logs[ip][path][int(status)][int(response_size)] += 1
+            total_requests += 1
+            total_response_size += int(response_size)
+            if int(status) >= 400:
+                error_requests += 1
 
-    def parse(self):
-        for line in self.file:
-            self.lines.append(line.strip().split())
-        return self.lines
+print("Top 3 IP addresses by request count:")
+ip_counts = Counter()
+for ip, paths in logs.items():
+    count = sum(sum(count for sizes in statuses.values() for count in sizes.values()) for statuses in paths.values())
+    ip_counts[ip] = count
+for ip, count in ip_counts.most_common(3):
+    print(f"  {ip}: {count} requests")
 
-    def getTopIps(self):
-        ipList = defaultdict(int)
-        for line in self.parse():
-            ipList[line[0]] += 1
-        return sorted(ipList.items(), key=lambda line: line[1], reverse=True)
+print(f"\nAverage response size: {total_response_size / total_requests:.2f} bytes")
 
-
-    def getAvgPageSize(self):
-        sizeList = []
-        for line in self.parse():
-            sizeList.append(int(line[6]))
-        return round(sum(sizeList) / len(sizeList), 2)
-
-
-    def getErrorRate(self):
-        returnCodes = []
-        numberrs = 0
-        for line in self.parse():
-            returnCodes.append(int(line[5]))
-            if int(line[5]) != 200:
-                numberrs += 1
-        return (round(float(numberrs / len(returnCodes) * 100), 2))
-
-
-
-if __name__ == "__main__":
-  r = logParse('./input1.txt')
-  print(f'Top 3 IPs:')
-  for x, y in enumerate(r.getTopIps()):
-      if x < 3:
-        print(f'Count: {y[1]}, IP: {y[0]}')
-
-  print(f'Average Page Size: {r.getAvgPageSize()}')
-  print(f'Error Rate: {r.getErrorRate()}%')
+error_rate = (error_requests / total_requests) * 100
+print(f"Error rate: {error_rate:.2f}%")
